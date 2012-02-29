@@ -4,110 +4,110 @@ require 'net/http'
 require 'uri'
 require 'openssl'
 
-class FacebookImporter 
-  attr_accessor :user_id, :token, :con
-  attr_reader :family_list, :user_info
-  
-  TOKEN="AAADRgAhoADABAPCYJ8KhqO7F7aiKqHN62y7vJiakaIjqtoRobcIxSBJOokylsWbpGZARaV6u6uZBrwAngwPjhnnAmTHtZCn2LWYExmlDwZDZD"
-  TESTUSER_ID="100000031321425"
-  CON="family"
-  
-  def static_token
-    @token=TOKEN
+class FacebookImporter
+  def initialize(person_id, token)
+    @person_id = person_id
+    @token = token
   end
-  
-  def set_token(token)
-    @token=token
-  end
-  
-  def static_user
-    @user_id=TESTUSER_ID
-  end
-  
-  def set_user(user_id)
-    @user_id=user_id
-  end
-  
+    
   def get_relatives
-    uri=URI.parse("https://graph.facebook.com/#{user_id}/#{CON}?access_token=#{token}")
+    uri = URI.parse("https://graph.facebook.com/#{@person_id}/family?access_token=#{@token}")
     http = Net::HTTP.new(uri.host, uri.port)
-    http.use_ssl=true
-    http.verify_mode=OpenSSL::SSL::VERIFY_NONE
+    http.use_ssl = true
+    http.verify_mode = OpenSSL::SSL::VERIFY_NONE
     
-    request=Net::HTTP::Get.new(uri.request_uri)
+    request = Net::HTTP::Get.new(uri.request_uri)
     
-    response=http.request(request)
-    @family_list = JSON(response.body)
-  end
-  
-  def get_user_info
-    uri=URI.parse("https://graph.facebook.com/#{user_id}?access_token=#{token}")
-    http = Net::HTTP.new(uri.host, uri.port)
-    http.use_ssl=true
-    http.verify_mode=OpenSSL::SSL::VERIFY_NONE
+    response = http.request(request)
+    relatives = JSON(response.body)
     
-    request=Net::HTTP::Get.new(uri.request_uri)
-    
-    response=http.request(request)
-    @user_info = JSON(response.body)
-  end
-  
-  def self.fetch_relatives
-    user = self.new
-    user.static_token
-    user.static_user
-    #id = user.get_user_info.fetch("id")
-    #name = user.get_user_info.fetch("name")
-    #firstname = user.get_user_info.fetch("first_name")
-    #lastname = user.get_user_info.fetch("lastname")
-    #birthdate = user.get_user_info.fetch("birthday")
-    #gender = user.get_user_info.fetch("gender")
-    #link = user.get_user_info.fetch("link")
-    
-    
-    gotArray = user.get_relatives.fetch("data")   
-    
-    local = self.new
-    local.static_token 
-    
-    gotArray.each_index do |i|
-      id = gotArray.at(i).fetch('id')
-      name = gotArray.at(i).fetch('name')
-      relationship = gotArray.at(i).fetch('relationship')
+    relatives.fetch("data").each do |fbperson|
+      @person_id = fbperson.fetch("id")
+      @name = fbperson.fetch("name")
+      @relation = fbperson.fetch("relationship")
+      get_info(@person_id)
       
-      user.set_user(id)
-      begin
-        id = user.get_user_info.fetch("id")
-        name = user.get_user_info.fetch("name")
-        firstname = user.get_user_info.fetch("first_name")
-        lastname = user.get_user_info.fetch("last_name")
-        birthdate = user.get_user_info.fetch("birthday")
-        gender = user.get_user_info.fetch("gender")
-        link = user.get_user_info.fetch("link")
-      rescue => e
-        p e.message
-        p user.get_user_info.update({"birthday"=>nil}).fetch("birthday")
-      end 
-      begin
-        hometown_id = user.get_user_info.fetch("hometown").fetch("id")
-        hometown = user.get_user_info.fetch("hometown").fetch("name").partition(/, /)[0]
-        
-        local.set_user(hometown_id)
-        hometown_link = local.get_user_info.fetch("link")
-      rescue => e
-        p e.message
-        p user.get_user_info.update({"hometown"=>nil}).fetch("hometown")
-      end
       
-      person = Person.find_or_initialize_by_url(link)
-      person.update_attributes(:url => link, :firstname => firstname, :lastname => lastname, :birthdate => birthdate) # :thumbnail => thumbnail,
-      
-      place=Location.find_or_initialize_by_url(hometown_link)
-      place.url = hometown_link
-      place.name = hometown
-      place.save
-      person.residences.create(:location_id => place.id, :status => "birthplace")
-      p person.inspect
     end
+    
   end
+  
+  def get_info(person_id)
+    uri = URI.parse("https://graph.facebook.com/#{@person_id = person_id}?access_token=#{@token}")
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = true
+    http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+    
+    request = Net::HTTP::Get.new(uri.request_uri)
+    
+    response = http.request(request)
+    fb_obj = JSON(response.body)
+    
+    p @person_id = fb_obj.fetch("id")
+    p @firstname = fb_obj.fetch("first_name")
+    p @lastname = fb_obj.fetch("last_name")
+    p @sex = fb_obj.fetch("gender")
+    p @person_link = fb_obj.fetch("link")
+    get_thumbnail(@person_id)
+    
+    if !fb_obj.key?("birthday")
+      p @birthdate = fb_obj.update({"birthday"=>"no birthdate avaiable"}).fetch("birthday")
+    else
+      p @birthdate = fb_obj.fetch("birthday") 
+    end
+     
+    if !fb_obj.key?("hometown")
+      fb_obj.update({"hometown"=>"no hometown"})
+      p @hometown_id = "no id avaiable"
+      p @hometown_name = "no name avaiable"
+      p @hometown_link = "no link avaiable"
+    else
+      p @hometown_id = fb_obj.fetch("hometown").fetch("id")
+      p @hometown_name = fb_obj.fetch("hometown").fetch("name")
+      get_latlong(@hometown_id)
+    end
+    
+    person = Person.find_or_initialize_by_url(@person_link)
+    person.update_attributes(:url => @person_link, :firstname => @firstname, :lastname => @lastname, :thumbnail => @profile_pic_url, :birthdate => @birthdate)
+    place = Location.find_or_initialize_by_url(@hometown_link)
+    place.url = @hometown_link
+    place.name = @hometown_name
+    place.save
+    person.residences.create(:location_id => place.id, :status => @relation)
+    p person.inspect
+  end
+  
+  def get_thumbnail(person_id)
+    uri = URI.parse("https://graph.facebook.com/#{@person_id=person_id}/picture?access_token=#{@token}")
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = true
+    http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+    
+    request = Net::HTTP::Get.new(uri.request_uri)
+    
+    response = http.request(request)
+    p @profile_pic_url = response.body
+  end
+  
+  def get_latlong(hometown_id)
+    uri = URI.parse("https://graph.facebook.com/#{@hometown_id=hometown_id}?access_token=#{@token}")
+    http = Net::HTTP.new(uri.host, uri.port)
+    http.use_ssl = true
+    http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+    
+    request = Net::HTTP::Get.new(uri.request_uri)
+    
+    response = http.request(request)
+    location_info = JSON(response.body)
+    p @hometown_lat = location_info.fetch("location").fetch("latitude")
+    p @hometown_long = location_info.fetch("location").fetch("longitude")
+  end
+  
 end
+
+test_person_id = "100000031321425" #me
+test_token = "AAADRgAhoADABAPCYJ8KhqO7F7aiKqHN62y7vJiakaIjqtoRobcIxSBJOokylsWbpGZARaV6u6uZBrwAngwPjhnnAmTHtZCn2LWYExmlDwZDZD"
+
+person = FacebookImporter.new(test_person_id, test_token)
+person.get_relatives
+
