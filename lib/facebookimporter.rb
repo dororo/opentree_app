@@ -26,14 +26,11 @@ class FacebookImporter
       @name = fbperson.fetch("name")
       @relation = fbperson.fetch("relationship")
       get_info(@person_id)
-      
-      
     end
-    
   end
   
   def get_info(person_id)
-    uri = URI.parse("https://graph.facebook.com/#{@person_id = person_id}?access_token=#{@token}")
+    uri = URI.parse("https://graph.facebook.com/#{person_id}?access_token=#{@token}")
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = true
     http.verify_mode = OpenSSL::SSL::VERIFY_NONE
@@ -43,27 +40,31 @@ class FacebookImporter
     response = http.request(request)
     fb_obj = JSON(response.body)
     
-    p @person_id = fb_obj.fetch("id")
-    p @firstname = fb_obj.fetch("first_name")
-    p @lastname = fb_obj.fetch("last_name")
-    p @sex = fb_obj.fetch("gender")
-    p @person_link = fb_obj.fetch("link")
+    @person_id = fb_obj.fetch("id")
+    @firstname = fb_obj.fetch("first_name")
+    @lastname = fb_obj.fetch("last_name")
+    if !fb_obj.key?("gender")
+      @sex = fb_obj.update({"gender"=>"no gender"}).fetch("gender")
+    else
+      @sex = fb_obj.fetch("gender")
+    end
+    @person_link = fb_obj.fetch("link")
     get_thumbnail(@person_id)
     
     if !fb_obj.key?("birthday")
-      p @birthdate = fb_obj.update({"birthday"=>"no birthdate avaiable"}).fetch("birthday")
+      @birthdate = fb_obj.update({"birthday"=>"no birthdate avaiable"}).fetch("birthday")
     else
-      p @birthdate = fb_obj.fetch("birthday") 
+      @birthdate = fb_obj.fetch("birthday") 
     end
      
     if !fb_obj.key?("hometown")
       fb_obj.update({"hometown"=>"no hometown"})
-      p @hometown_id = "no id avaiable"
-      p @hometown_name = "no name avaiable"
-      p @hometown_link = "no link avaiable"
+      @hometown_id = "no id avaiable"
+      @hometown_name = "no name avaiable"
+      @hometown_link = "no link avaiable"
     else
-      p @hometown_id = fb_obj.fetch("hometown").fetch("id")
-      p @hometown_name = fb_obj.fetch("hometown").fetch("name")
+      @hometown_id = fb_obj.fetch("hometown").fetch("id")
+      @hometown_name = fb_obj.fetch("hometown").fetch("name")
       get_latlong(@hometown_id)
     end
     
@@ -72,25 +73,19 @@ class FacebookImporter
     place = Location.find_or_initialize_by_url(@hometown_link)
     place.url = @hometown_link
     place.name = @hometown_name
+    place.lat = @hometown_lat
+    place.lon = @hometown_long
     place.save
     person.residences.create(:location_id => place.id, :status => @relation)
     p person.inspect
   end
   
   def get_thumbnail(person_id)
-    uri = URI.parse("https://graph.facebook.com/#{@person_id=person_id}/picture?access_token=#{@token}")
-    http = Net::HTTP.new(uri.host, uri.port)
-    http.use_ssl = true
-    http.verify_mode = OpenSSL::SSL::VERIFY_NONE
-    
-    request = Net::HTTP::Get.new(uri.request_uri)
-    
-    response = http.request(request)
-    p @profile_pic_url = response.body
+    @profile_pic_url = "https://graph.facebook.com/#{person_id}/picture"
   end
   
   def get_latlong(hometown_id)
-    uri = URI.parse("https://graph.facebook.com/#{@hometown_id=hometown_id}?access_token=#{@token}")
+    uri = URI.parse("https://graph.facebook.com/#{hometown_id}?access_token=#{@token}")
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = true
     http.verify_mode = OpenSSL::SSL::VERIFY_NONE
@@ -99,13 +94,14 @@ class FacebookImporter
     
     response = http.request(request)
     location_info = JSON(response.body)
-    p @hometown_lat = location_info.fetch("location").fetch("latitude")
-    p @hometown_long = location_info.fetch("location").fetch("longitude")
+    @hometown_lat = location_info.fetch("location").fetch("latitude")
+    @hometown_long = location_info.fetch("location").fetch("longitude")
+    @hometown_link = location_info.fetch("link")
   end
   
 end
 
-test_person_id = "100000031321425" #me
+test_person_id = "1403436367" #me
 test_token = "AAADRgAhoADABAPCYJ8KhqO7F7aiKqHN62y7vJiakaIjqtoRobcIxSBJOokylsWbpGZARaV6u6uZBrwAngwPjhnnAmTHtZCn2LWYExmlDwZDZD"
 
 person = FacebookImporter.new(test_person_id, test_token)
