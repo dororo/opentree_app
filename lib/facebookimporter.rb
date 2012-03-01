@@ -101,7 +101,7 @@ class FacebookImporter
   
 end
 
-test_person_id = "1403436367" #me
+test_person_id = "1403436367" 
 test_token = "AAADRgAhoADABAPCYJ8KhqO7F7aiKqHN62y7vJiakaIjqtoRobcIxSBJOokylsWbpGZARaV6u6uZBrwAngwPjhnnAmTHtZCn2LWYExmlDwZDZD"
 
 person = FacebookImporter.new(test_person_id, test_token)
