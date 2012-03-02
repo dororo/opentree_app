@@ -3,6 +3,7 @@ require 'net/https'
 require 'net/http'
 require 'uri'
 require 'openssl'
+require 'date'
 
 class FacebookImporter
   def initialize(person_id, token)
@@ -52,16 +53,16 @@ class FacebookImporter
     get_thumbnail(@person_id)
     
     if !fb_obj.key?("birthday")
-      @birthdate = fb_obj.update({"birthday"=>"no birthdate avaiable"}).fetch("birthday")
+      @birthdate = fb_obj.update({"birthday"=>"01/01/1001"}).fetch("birthday")
     else
-      @birthdate = fb_obj.fetch("birthday") 
+      @birthdate = fb_obj.fetch("birthday")
     end
      
     if !fb_obj.key?("hometown")
       fb_obj.update({"hometown"=>"no hometown"})
-      @hometown_id = "no id avaiable"
-      @hometown_name = "no name avaiable"
-      @hometown_link = "no link avaiable"
+      @hometown_id = "no cityid avaiable"
+      @hometown_name = "no city avaiable"
+      @hometown_link = "no citylink avaiable"
     else
       @hometown_id = fb_obj.fetch("hometown").fetch("id")
       @hometown_name = fb_obj.fetch("hometown").fetch("name")
@@ -69,14 +70,14 @@ class FacebookImporter
     end
     
     person = Person.find_or_initialize_by_url(@person_link)
-    person.update_attributes(:url => @person_link, :firstname => @firstname, :lastname => @lastname, :thumbnail => @profile_pic_url, :birthdate => @birthdate)
+    person.update_attributes(:url => @person_link, :firstname => @firstname, :lastname => @lastname, :sex => @sex, :birthdate => @birthdate, :birthplace => @hometown_name, :birthplaceurl => @hometown_link, :thumbnail => @profile_pic_url, )
     place = Location.find_or_initialize_by_url(@hometown_link)
     place.url = @hometown_link
     place.name = @hometown_name
     place.lat = @hometown_lat
     place.lon = @hometown_long
     place.save
-    person.residences.create(:location_id => place.id, :status => @relation)
+    person.residences.create(:location_id => place.id, :status => "birthplace")
     p person.inspect
   end
   
@@ -101,7 +102,7 @@ class FacebookImporter
   
 end
 
-test_person_id = "1403436367" 
+test_person_id = "630819600" 
 test_token = "AAADRgAhoADABAPCYJ8KhqO7F7aiKqHN62y7vJiakaIjqtoRobcIxSBJOokylsWbpGZARaV6u6uZBrwAngwPjhnnAmTHtZCn2LWYExmlDwZDZD"
 
 person = FacebookImporter.new(test_person_id, test_token)
